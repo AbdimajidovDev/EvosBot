@@ -1,0 +1,276 @@
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+
+import methods
+from database import Database
+import globals
+from methods import send_category_buttons, send_product_buttons
+
+db = Database("db-evos.db")
+
+def inline_handler(update, context):
+    query = update.callback_query
+    data_sp = str(query.data).split('_')
+    db_user = db.get_user_by_chat_id(query.message.chat_id)
+
+    print('inlines/inline_hand query: ', query)
+    print('inlines/inline_hand query.data: ', query.data)
+    print('inlines/inline_handler 10-qator data_sp: ', data_sp)
+    print('inlines/inline_handler 12-qator db_user: ', db_user)
+
+    if data_sp[0] == 'category':
+        if data_sp[1] == "product":
+            if data_sp[2] == "back":
+                query.message.delete()
+                products = db.get_products_by_category(category_id=int(data_sp[3]))
+                buttons = send_product_buttons(products=products, lang_id=db_user['lang_id'])
+
+                clicked_btn = db.get_category_parent(int(data_sp[3]))
+
+                if clicked_btn and clicked_btn['parent_id']:
+                    buttons.append([InlineKeyboardButton(
+                        text='Back', callback_data=f"category_back_{clicked_btn['parent_id']}"
+                    )])
+                else:
+                    buttons.append([InlineKeyboardButton(
+                        text="Back", callback_data=f"category_back"
+                    )])
+
+                query.message.reply_text(
+                    text=globals.TEXT_ORDER[db_user['lang_id']],
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=buttons
+                    )
+                )
+
+            else:
+                if len(data_sp) == 4:
+                    query.message.delete()
+                    carts = context.user_data.get("carts", {})
+                    carts[f"{data_sp[2]}"] = carts.get(f"{data_sp[2]}", 0) + int(data_sp[3])
+                    context.user_data['carts'] = carts
+
+                    categories = db.get_categories_by_parent()
+                    buttons = methods.send_category_buttons(categories=categories, lang_id=db_user['lang_id'])
+
+                    text = f"{globals.AT_KORZINKA[db_user['lang_id']]}:\n\n"
+                    lang_code =  globals.LANGUAGE_CODE[db_user['lang_id']]
+                    total_price = 0
+
+                    for cart, val in carts.items():
+                        product = db.get_product_for_cart(int(cart))
+                        text += f"{val} x {product[f'cat_name_{lang_code}']} {product[f'name_{lang_code}']}\n"
+                        total_price += product['price'] * val
+                    text += f"\n{globals.ALL[db_user['lang_id']]}: {total_price}"
+                    buttons.append([InlineKeyboardButton(text=f"{globals.BTN_KORZINKA[db_user['lang_id']]}", callback_data="cart")])
+
+                    query.message.reply_text(
+                        text=text,
+                        reply_markup=InlineKeyboardMarkup(
+                            inline_keyboard=buttons,
+                        )
+                    )
+
+                else:
+
+                    product = db.get_product_by_id(int(data_sp[2]))
+                    print(data_sp)
+                    query.message.delete()
+
+                    caption = f"{globals.TEXT_PRODUCT_PRICE[db_user['lang_id']]} " + str(product['price']) + \
+                              f"\n{globals.TEXT_PRODUCT_DESC[db_user['lang_id']]}" + \
+                              product[f"description_{globals.LANGUAGE_CODE[db_user['lang_id']]}"]
+
+                    buttons = [
+                        [
+                            InlineKeyboardButton(
+                                text="1",
+                                callback_data=f"category_product_{data_sp[2]}_{1}"
+                            ),
+                            InlineKeyboardButton(
+                                text="2",
+                                callback_data=f"category_product_{data_sp[2]}_{2}"
+                            ),
+                            InlineKeyboardButton(
+                                text="3",
+                                callback_data=f"category_product_{data_sp[2]}_{3}"
+                            ),
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="4",
+                                callback_data=f"category_product_{data_sp[2]}_{4}"
+                            ),
+                            InlineKeyboardButton(
+                                text="5",
+                                callback_data=f"category_product_{data_sp[2]}_{5}"
+                            ),
+                            InlineKeyboardButton(
+                                text="6",
+                                callback_data=f"category_product_{data_sp[2]}_{6}"
+                            ),
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="7",
+                                callback_data=f"category_product_{data_sp[2]}_{7}"
+                            ),
+                            InlineKeyboardButton(
+                                text="8",
+                                callback_data=f"category_product_{data_sp[2]}_{8}"
+                            ),
+                            InlineKeyboardButton(
+                                text="9",
+                                callback_data=f"category_product_{data_sp[2]}_{9}"
+                            ),
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="Back",
+                                callback_data=f"category_product_back_{product['category_id']}"
+                            )
+                        ]
+                    ]
+
+
+
+                    query.message.reply_photo(
+                        photo=open(product['image'], 'rb'),
+                        caption=caption,
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+                    )
+
+        elif data_sp[1] == "back":
+            if len(data_sp) == 3:
+                print("data_sp: ", data_sp)
+                parent_id = int(data_sp[2])
+            else:
+                print("No parent")
+                parent_id = None
+
+            categories = db.get_categories_by_parent(parent_id=parent_id)
+            buttons = send_category_buttons(categories=categories, lang_id=db_user['lang_id'])
+            print("db_user -> lang_id: ", db_user)
+
+            if parent_id:
+                clicked_btn = db.get_category_parent(parent_id)
+
+                if clicked_btn and clicked_btn['parent_id']:
+                    buttons.append([InlineKeyboardButton(
+                        text="Back", callback_data=f"category_back_{clicked_btn['parent_id']}"
+                    )])
+                else:
+                    buttons.append([InlineKeyboardButton(
+                        text="Back", callback_data=f'category_back'
+                    )])
+
+            query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=buttons
+                )
+            )
+        else:
+            print('data_sp[1]: ', data_sp)
+            categories = db.get_categories_by_parent(parent_id=int(data_sp[1]))
+            if categories:
+                buttons = send_category_buttons(categories=categories, lang_id=db_user['lang_id'])
+            else:
+                products = db.get_products_by_category(category_id=int(data_sp[1]))
+                buttons = send_product_buttons(products=products, lang_id=db_user['lang_id'])
+
+            clicked_btn = db.get_category_parent(int(data_sp[1]))
+
+            if clicked_btn and clicked_btn['parent_id']:
+                buttons.append([InlineKeyboardButton(
+                    text="Back", callback_data=f"category_back_{clicked_btn['parent_id']}"
+                )])
+            else:
+                buttons.append([InlineKeyboardButton(
+                    text="Back", callback_data=f"category_back"
+                )])
+
+            query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=buttons
+                )
+            )
+
+    elif data_sp[0] == 'cart':
+        if len(data_sp) == 2 and data_sp[1] == "clear":
+            context.user_data.pop("carts")
+            categories = db.get_categories_by_parent()
+            buttons = methods.send_category_buttons(categories=categories, lang_id=db_user['lang_id'])
+            text = globals.TEXT_ORDER[db_user['lang_id']]
+
+            context.bot.send_message(
+                chat_id=update.callback_query.message.chat_id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=buttons
+                )
+            )
+
+        elif len(data_sp) == 2 and data_sp[1] == "back":
+            categories = db.get_categories_by_parent()
+            buttons = methods.send_category_buttons(categories=categories, lang_id=db_user['lang_id'])
+
+            if context.user_data.get("carts", {}):
+                carts = context.user_data.get("carts")
+                text = f"{globals.AT_KORZINKA[db_user['lang_id']]}:\n\n"
+                lang_code = globals.LANGUAGE_CODE[db_user['lang_id']]
+                total_price = 0
+
+                for cart, val in carts.items():
+                    product = db.get_product_for_cart(int(cart))
+                    text = f"{val} x {product[f'name_{lang_code}']}\n"
+                    total_price += product['price'] * val
+
+                text += f"\n{globals.ALL[db_user['lang_id']]}: {total_price}"
+
+                context.user_data.get('cart_text', text)
+
+                buttons.append([InlineKeyboardButton(text=f"{globals.BTN_KORZINKA[db_user['lang_id']]}", callback_data="cart")])
+
+            else:
+                text = globals.TEXT_ORDER[db_user['lang_user']]
+            query.message.edit_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=buttons
+                )
+            )
+
+        else:
+            buttons = [
+                [
+                    InlineKeyboardButton(text="Buyurtma berish", callback_data="order"),
+                    InlineKeyboardButton(text="Savatchani bo'shatish", callback_data="cart_clear")
+                ],
+                [
+                    InlineKeyboardButton(text="🔙 Ortga", callback_data="cart_back")
+                ]
+            ]
+
+            query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=buttons
+                )
+            )
+
+    elif data_sp[0] == 'order':
+        if len(data_sp) > 1 and data_sp[1] == "payment":
+            context.user_data['payment_type'] = int(data_sp[2])
+            query.message.delete()
+            query.message.reply_text(
+                text=globals.SEND_LOCATION[db_user['lang_id']],
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton(text=globals.SEND_LOCATION[db_user['lang_id']], request_location=True)]],
+                                                 resize_keyboard=True)
+            )
+        else:
+            query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(
+                    [[
+                        InlineKeyboardButton(text="Naqd pul", callback_data='order_payment_1'),
+                        InlineKeyboardButton(text="Karta", callback_data='order_payment_2'),
+                    ]]
+                )
+            )
