@@ -6,7 +6,7 @@ from register import check
 from messages import message_handler
 from inlines import inline_handler
 
-ADMIN_ID = 5094680383
+ADMIN_ID = 0000000000
 TOKEN = "YOUR TOKEN"
 
 db = Database("db-evos.db")
